@@ -2,6 +2,18 @@
   <img src="./badssl.png" alt="" width="472" height="68">
 </a>
 
+This is a fork of the official [`badssl.com`](https://badssl.com/) test suite. Since it has been archived (and therefore is no longer maintained), I forked the repo to add a test for the "Root Agency" CA certificate (RSA-512, MD5) that some products have erroneously trusted in the past (e.g., ContentWatch Net Nanny, Untangle NG Firewall). Perhaps they are still doing it.
+
+Request: Could somebody running Net Nanny (on computer and/or smartphone) try the Root Agency test and report the results to me?
+
+Quick deployments include:
+1. Clone the repo in a VM with a NAT'd interface, have a [TCP proxy](https://www.partow.net/programming/tcpproxy/index.html) or reverse proxy forward traffic to a custom port on the host to the guest. Point `badssl.com` to the host IP address (via a local entry in the test machine's `hosts` file or using a DNS client like [`dnschef`](https://github.com/iphelix/dnschef) and pointing the test machine's DNS server to the host machine.
+2. Deploy in a cloud VM, point `badssl.com` to its public IP address.
+3. Run Linux natively to run `badssl.com` and manage the DNS entries as in #1.
+4. Maybe using WSL?
+
+## Overview
+
 Visit [`badssl.com`](https://badssl.com/) for a list of test subdomains, including:
 
 - [`self-signed.badssl.com`](https://self-signed.badssl.com)
