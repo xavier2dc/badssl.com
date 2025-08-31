@@ -1,83 +1,102 @@
-<a href="https://badssl.com/">
-  <img src="./badssl.png" alt="" width="472" height="68">
-</a>
+# Root Agency TLS Proxy Test Suite
 
-This is a fork of the official [`badssl.com`](https://badssl.com/) test suite. Since it has been archived (and therefore is no longer maintained), I forked the repo to add a test for the "Root Agency" CA certificate (RSA-512, MD5) that some products have erroneously trusted in the past (e.g., ContentWatch Net Nanny, Untangle NG Firewall). Perhaps they are still doing it.
+This is a fork of the official [`badssl.com`](https://badssl.com/) test suite. Since `badssl.com` has been archived and is no longer maintained, this fork adds a test for the **Root Agency** CA certificate (RSA-512, MD5).
+Some products (notably *ContentWatch Net Nanny* and *Untangle NG Firewall*) have mistakenly trusted this certificate in the past, exposing users to trivial HTTPS man-in-the-middle attacks.
 
-Request: Could somebody running Net Nanny (on computer and/or smartphone) try the Root Agency test and report the results to me?
+## Why this test?
 
-Quick deployments include:
-1. Clone the repo in a VM with a NAT'd interface, have a [TCP proxy](https://www.partow.net/programming/tcpproxy/index.html) or reverse proxy forward traffic to a custom port on the host to the guest. Point `badssl.com` to the host IP address (via a local entry in the test machine's `hosts` file or using a DNS client like [`dnschef`](https://github.com/iphelix/dnschef) and pointing the test machine's DNS server to the host machine.
-2. Deploy in a cloud VM, point `badssl.com` to its public IP address.
-3. Run Linux natively to run `badssl.com` and manage the DNS entries as in #1.
-4. Maybe using WSL?
+We found that certain TLS proxies built into content filters trust the dummy **Root Agency** certificate as a valid issuer of server certificates.  
+The `(Microsoft) Root Agency` test in this suite helps determine if your device is vulnerable, either because you are running these products, or another one with the same design flaw.
 
-## Overview
+### Affected products
 
-Visit [`badssl.com`](https://badssl.com/) for a list of test subdomains, including:
+- **Net Nanny**  (https://www.netnanny.com/): a popular parental control application to restrict and filter bad content from webpages visited by children
+  Tested versions: 7.2.4.2, 7.2.6.0, 7.2.8.0 (likely earlier versions too).
+  Vendor never confirmed a fix. Subscription required for newer versions: help us test!
 
-- [`self-signed.badssl.com`](https://self-signed.badssl.com)
-- [`expired.badssl.com`](https://expired.badssl.com)
-- [`mixed.badssl.com`](https://mixed.badssl.com)
-- [`rc4.badssl.com`](https://rc4.badssl.com)
-- [`hsts.badssl.com`](https://hsts.badssl.com)
+- **Untangle NG Firewall**  (https://www.untangle.com/untangle-ng-firewall/): a network appliance to control and filter traffic in enterprise networks
+  Tested versions: 13.0, 13.2 (vulnerable).
+  Version 14.10 is **no longer vulnerable**.
 
-## Server Setup
+Since both made the same mistake independently, other products may share the flaw.
 
-Stock Ubuntu VM, DNS A records for `badssl.com.` and `*.badssl.com.` pointing to the VM.
+---
 
-### Testing and development
+## How to run the test
 
-1. Follow the instructions to [install Docker.](https://www.docker.com/get-docker)
-2. Clone into the badssl repo by running `git clone https://github.com/chromium/badssl.com && cd badssl.com`.
-3. In order to access the various badssl subdomains locally you will need to add them to your [system hosts file](https://bencane.com/2013/10/29/managing-dns-locally-with-etchosts/). Run `make list-hosts` and copy and paste the output into `/etc/hosts`.
-4. Start Docker by running `make serve`.
-5. You can now navigate to `badssl.test` in your browser, and you should see a certificate error.
-6. The badssl root certificate is at `certs/sets/test/gen/crt/ca-root.crt`. In order to get the rest of the badssl subdomains working, you will need to add this to your machine's list of trusted certificates.
-    - On `macOS`, drag `certs/sets/test/gen/crt/ca-root.crt` into the login section of the program Keychain Access. A BadSSL Root Certificate Authority entry should appear in the list. Double-click on this entry and select "Always Trust" from the drop-down menu next to "Secure Sockets Layer (SSL)." Close the window to save your changes.
+1. Install Docker. Clone this repository and run:
 
-      If you are already familiar with this process, you can instead run this command:
+   ```bash
+   sudo make
+   ```
+(`sudo` required to start the Docker container at the end)
 
-      ```sh
-      security add-trusted-cert -r trustRoot -p ssl \
-        -k "$HOME/Library/Keychains/login.keychain" certs/sets/test/gen/crt/ca-root.crt
-      ```
+2. The server will listen on port **443**. Options for testing:
+   - Run in a VM and forward (all subdomains of) `badssl.com` to the host, then forward the traffic to the VM using a [TCP proxy](https://www.partow.net/programming/tcpproxy/index.html) or a reverse proxy. Use a DNS proxy like [`dnschef`](https://github.com/iphelix/dnschef) to help you with that. Alternatively, hardcode only `root-agency.badssl.com` in the test machine's `hosts` file.
+   - Deploy in a cloud VM and point `badssl.com` to its public IP.
+   - Run directly on Linux or possibly WSL.
 
-7. In order to preserve the client and root certificates even after running `make clean`, run:
+3. Visit: [https://root-agency.badssl.com](https://root-agency.badssl.com)
 
-```sh
-cd certs/sets/test
-mkdir -p pregen/crt pregen/key
-cp gen/crt/ca-root.crt pregen/crt/ca-root.crt
-cp gen/crt/client.crt pregen/crt/client.crt
-cp gen/crt/client-ca-root.crt pregen/crt/client-ca-root.crt
-cp gen/key/ca-root.key pregen/key/ca-root.key
-cp gen/key/client.key pregen/key/client.key
-cp gen/key/client-ca-root.key pregen/key/client-ca-root.key
-```
+### Outcomes
 
-## Acknowledgments
+- ❌ **No browser warning** → You are vulnerable.
+- ⚠️ **Browser warning shown**:
+  - *Unknown CA (e.g., net::ERR_CERT_AUTHORITY_INVALID)*
+    - If issuer is **Root Agency** → either no proxy ✅, proxy not filtering this connection ⚠️, or proxy does not trust Root Agency ✅
+    - If issuer is a **proxy CA** → the proxy rejected Root Agency, passed back its own “invalid” CA (safe) ✅
+  - *Different error* → Proxy intercepted and blocked the connection (safe).
 
-badssl.com is hosted on Google Cloud infrastructure and co-maintained by:
+**Note:** SNI is required. All modern browsers support it.
 
-- [April King](https://github.com/april), Mozilla Firefox
-- [Lucas Garron](https://github.com/lgarron), formerly Google Chrome
-- [Chris Thompson](https://github.com/christhompson), Google Chrome
+**Note 2:** Content filters may only filter connections based on a list of domain names or keywords to appear in a server certificate. Make sure to mimic or tune the list accordingly.
 
-Several public badssl.com certificates required special issuance processes. Most certificates were graciously issued for free, thanks to help from:
+---
 
-- [Vincent Lynch](https://twitter.com/vtlynch), [The SSL Store](https://www.thesslstore.com/) (`sha1-2016`, `sha1-2017`)
-- [Richard Barnes](https://twitter.com/rlbarnes), Mozilla (`1000-sans`, `10000-sans`)
-- [Clint Wilson](https://twitter.com/clintw_), [DigiCert](https://www.digicert.com/) (most wildcards)
-- [Andrew Ayer](https://github.com/agwa), [SSLMate](https://sslmate.com/) (`invalid-expected-sct`)
-- [Rob Stradling](https://github.com/robstradling), [Comodo](https://www.comodo.com/) (`1000-sans`, `10000-sans`, `no-subject`, `no-common-name`, `sha1-intermediate`, `ѕрооғ`)
+## Why is this dangerous?
 
-Various subdomains and test pages are also implemented by [external contributors](https://github.com/chromium/badssl.com/graphs/contributors).
+TLS was designed to prevent interception. Content filters must break TLS and re-issue certificates, but they also need to validate upstream certificates correctly.
 
-## Disclaimer
+Instead of relying solely on the OS trust store, Net Nanny and Untangle included certificates from Windows’ *Intermediate CA store*, which contains non-trusted certificates like Root Agency. Since Root Agency’s private key is publicly retrievable from Microsoft’s `makecert.exe`, an attacker can forge certificates that these proxies will accept.
 
-`badssl.com` is meant for *manual* testing of security UI in web clients.
+## Attack scenario
 
-Most subdomains are likely to have stable functionality, but anything *could* change without notice. If you would like a documented guarantee for a particular use case, please file an issue. (Alternatively, you could make a fork and host your own copy.)
+1. Obtain `makecert.exe` from the Windows SDK.
+2. Extract the Root Agency private key (bundled in the binary).
+3. Target a victim behind Net Nanny (Windows) or Untangle NG Firewall.
+4. Intercept TLS traffic and reissue certificates signed by Root Agency.
+   → Victim’s browser sees no warning.
 
-badssl.com is not an official Google product. It is offered "AS-IS" and without any warranties.
+## Root Agency?
+
+Microsoft provides the [*makecert.exe*](https://docs.microsoft.com/en-us/windows/desktop/seccrypto/makecert) certificate management tool as part of its Windows SDK.
+
+By default, when creating a new leaf certificate, makecert chains it to a dummy root certificate called **Root Agency**.
+
+While this root certificate is not trusted by the OS or any browser, it is included in the *Intermediate Certification Authorities* store in every copy of Windows. The root certificate is valid since **1996**, meaning it has probably been there since Windows 95 or 98.
+
+It was also generated with then-current standards and simply carries a **512-bit RSA public key**.
+The corresponding private key can simply be retrieved from any version of *makecert.exe* in the PVK resource.
+
+## Timeline of the vulnerabilities
+
+- **2015-03-XX:** Vulnerability found in Net Nanny, PoC works
+- **2015-08-24:** Contacted support@netnanny.com about a RSA-512 trusted root certificate
+- **2015-08-28:** Response from Net Nanny's VP Development:  *The Net Nanny CA store is created by importing from the browsers/stores we detect. That is, Windows/IE, Mozilla, Android, and Apple/Safari stores. Additionally, we ship a list of CA's that matches Mozilla's CA's (since they use their own store). It is kept up to date with every release, however, we do not update the store again until the next release/update. It would be possible to update the store more frequently via a definition update. An enhancement request to do that has been entered into our system.*
+- **2016-02-22:** [Paper presented at NDSS](https://xavier2dc.fr/papers/tls-proxy-ndss2016.pdf)
+- **2017-07-28:** Retested current version, Net Nanny is still vulnerable
+- **2017-08-09:** Vulnerability found in Untangle NG Firewall (PoC by me, tested by Louis Waked)
+- **2018-0X-XX:** L. Waked contacted Untangle, automatic reply only
+- **2018-06-06:** [Paper presented at AsiaCCS](https://users.encs.concordia.ca/~mmannan/publications/enterprise-interception-asiaccs2018.pdf)
+- **2018-11-12:** Contacted CMU CERT about Net Nanny
+- **2018-11-26:** CERT *"decided not to handle the case"* as they *"generally do not accept reports of issues that have already been publicly disclosed."*
+- **2018-11-28:** Tested Untangle 14.10, no longer vulnerable
+- **2018-11-29:** [Issues initially published](https://web.archive.org/web/20190831061827/https://madiba.encs.concordia.ca/~x_decarn/rootagency.html)
+- **2025-08-31:** Badssl.com fork with test added
+
+---
+
+## Contributing
+
+- If you run **Net Nanny** or another filter, please try the Root Agency test and report results.
+- Contact details: [https://xavier2dc.fr](https://xavier2dc.fr)
