@@ -431,6 +431,15 @@ $(O)/gen/chain/subdomain-webpack-dev-server.pem: $(O)/gen/crt/subdomain-webpack-
 	./tool chain $@ $(D) $^
 
 ################################
+$(O)/gen/csr/subdomain-root-agency.csr: src/conf/subdomain-root-agency.conf $(O)/gen/key/leaf-main.key
+	./tool gen-csr $@ $(D) $^
+$(O)/gen/crt/subdomain-root-agency.crt: src/conf/subdomain-root-agency.conf $(O)/gen/csr/subdomain-root-agency.csr src/key/ca-root-agency.key src/crt/ca-root-agency.crt
+	./tool sign $@ $(D) $(SIGN_LEAF_DEFAULTS) $^
+CHAINS_PROD += $(O)/gen/chain/subdomain-root-agency.pem
+$(O)/gen/chain/subdomain-root-agency.pem: $(O)/gen/crt/subdomain-root-agency.crt
+	./tool chain $@ $(D) $^
+
+################################
 $(O)/gen/key/leaf-revoked.key:
 	./tool gen-key $@ $(D) 2048
 
