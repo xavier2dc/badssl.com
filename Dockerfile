@@ -11,10 +11,7 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     make \
     nginx \
-    ruby2.4 \
-    ruby2.4-dev
-RUN gem update --system
-RUN gem install jekyll
+    jekyll
 
 # Install badssl.com
 ADD . badssl.com
